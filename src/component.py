@@ -8,19 +8,28 @@ import logging_gelf.handlers
 import logging_gelf.formatters
 import sys
 import os
-import datetime # noqa
+import datetime  # noqa
+import requests
+import json
+from urllib.parse import urlencode
 
 from kbc.env_handler import KBCEnvHandler
-from kbc.result import KBCTableDef # noqa
-from kbc.result import ResultWriter # noqa
+from kbc.result import KBCTableDef  # noqa
+from kbc.result import ResultWriter  # noqa
 
 
 # configuration variables
-KEY_API_TOKEN = '#api_token'
-KEY_PERIOD_FROM = 'period_from'
-KEY_ENDPOINTS = 'endpoints'
+KEY_CLIENT_ID = 'client_id'
+KEY_CLIENT_SECRET = '#client_secret'
+KEY_LOOKER_HOST_URL = 'looker_host_url'
+KEY_DASHBOARDS = 'dashboards'
 
-MANDATORY_PARS = [KEY_ENDPOINTS, KEY_API_TOKEN]
+MANDATORY_PARS = [
+    KEY_CLIENT_ID,
+    KEY_CLIENT_SECRET,
+    KEY_LOOKER_HOST_URL,
+    KEY_DASHBOARDS
+]
 MANDATORY_IMAGE_PARS = []
 
 # Default Table Output Destination
@@ -73,39 +82,114 @@ class Component(KBCEnvHandler):
             logging.error(e)
             exit(1)
 
+    def post_request(self, url, header, body=None):
+        '''
+        Standard Post request
+        '''
 
-    def get_tables(self, tables, mapping):
-        """
-        Evaluate input and output table names.
-        Only taking the first one into consideration!
-        mapping: input_mapping, output_mappings
-        """
-        # input file
-        table_list = []
-        for table in tables:
-            name = table["full_path"]
-            if mapping == "input_mapping":
-                destination = table["destination"]
-            elif mapping == "output_mapping" :
-                destination = table["source"]
-            table_list.append(destination)
+        r = requests.post(url=url, headers=header, data=json.dumps(body))
 
-        return table_list
+        return r
 
+    def authorize(self, client_id, client_secret):
+        '''
+        Authorizing Looker account with client id and secret
+        '''
+
+        auth_url = self.base_url + 'login'
+        auth_header = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        }
+        auth_body = 'client_id={}&client_secret={}'.format(
+            client_id, client_secret)
+        request_url = auth_url+'?'+auth_body
+
+        res = self.post_request(request_url, auth_header)
+        if res.status_code != 200:
+            logging.error(
+                "Authorization failed. Please check your credentials.")
+            sys.exit(1)
+
+        self.access_token = res.json()['access_token']
+
+    def _construct_filters(self, filters):
+        '''
+        Filters Constructor
+        '''
+
+        temp = {}
+        for f in filters:
+            temp[f['filter_property']] = f['filter_value']
+        filter_string = '?{}'.format(urlencode(temp))
+        filter_string = '?Country=USA&Date%20%20Selector=2019%2F11%2F27'
+
+        return filter_string
+
+    def _construct_contacts(self, contacts):
+        '''
+        Contacts destination constructor
+        '''
+
+        contact_destination = []
+        for contact in contacts:
+            temp_base = {
+                'format': 'wysiwyg_pdf',
+                'apply_formatting': True,
+                'apply_vis': True,
+                'type': 'email',
+                'address': contact['recipient']
+            }
+            contact_destination.append(temp_base)
+
+        return contact_destination
 
     def run(self):
         '''
         Main execution code
         '''
-        # Get proper list of tables
-        in_tables = self.configuration.get_input_tables()
-        out_tables = self.configuration.get_expected_output_tables()
-        in_table_names = self.get_tables(in_tables, 'input_mapping')
-        out_table_names = self.get_tables(out_tables, 'output_mapping')
-        logging.info("IN tables mapped: "+str(in_table_names))
-        logging.info("OUT tables mapped: "+str(out_table_names))
-
         params = self.cfg_params  # noqa
+        client_id = params.get(KEY_CLIENT_ID)
+        client_secret = params.get(KEY_CLIENT_SECRET)
+        self.base_url = '{}api/3.1/'.format(params.get(KEY_LOOKER_HOST_URL))
+        dashboards = params.get(KEY_DASHBOARDS)
+
+        # Authorizating Looker Account
+        self.authorize(client_id, client_secret)
+        # Header for all requests
+        self.request_header = {
+            'Authorization': 'Bearer {}'.format(self.access_token),
+            'Content-Type': 'application/json'
+        }
+
+        # Running each of the dashboard in the dashboard configurations
+        for dashboard in dashboards:
+            logging.info(
+                'Processing Dashboard - {}'.format(dashboard['dashboard_id']))
+            request_base_form = {
+                'name': 'run_once - {}'.format(dashboard['dashboard_id']),
+                'dashboard_id': int(dashboard['dashboard_id']),
+                'title': 'run_once - {}'.format(dashboard['dashboard_id']),
+                'enable': True,
+                'run_once': True
+            }
+
+            contact_destination = self._construct_contacts(
+                dashboard['recipients'])
+            request_base_form['scheduled_plan_destination'] = contact_destination
+
+            # If filters exist in the configuration
+            if dashboard['filters']:
+                filters_string = self._construct_filters(
+                    filters=dashboard['filters'])
+                request_base_form['filters_string'] = filters_string
+
+            # Schedule requesting
+            request_url = '{}scheduled_plans/run_once'.format(self.base_url)
+            res = self.post_request(
+                url=request_url, header=self.request_header, body=request_base_form)
+            if res.status_code != 200:
+                logging.error(
+                    'Error in processing Dashboard - [{}] - {}'.format(dashboard['dashboard_id'], res.json()))
 
         logging.info("Extraction finished")
 
