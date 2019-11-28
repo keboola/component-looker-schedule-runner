@@ -30,12 +30,12 @@
         },
         "dashboards": {
             "type": "array",
-            "format": "table",
             "title": "Dashboards",
             "uniqueItems": true,
             "propertyOrder": 500,
             "items": {
                 "type": "object",
+                "title": "Dashboard",
                 "minLength": 1,
                 "properties": {
                     "dashboard_id": {
@@ -91,59 +91,18 @@
                         }
                     }
                 }
-            }
-        },
-        "dashboard_id": {
-            "type": "string",
-            "title": "Dashboard ID",
-            "minLength": 1,
-            "default": "0",
-            "propertyOrder": 500
-        },
-        "recipients": {
-            "type": "array",
-            "format": "table",
-            "title": "Recipients",
-            "uniqueItems": true,
-            "propertyOrder": 600,
-            "items": {
-                "type": "object",
-                "minLength": 1,
-                "properties": {
-                    "recipient": {
-                        "type": "string",
-                        "default": "nobody",
-                        "minLength": 1,
-                        "title": "Recipient"
-                    }
-                }
             },
             "default": [
                 {
-                    "recipient": "nobody"
+                    "dashboard_id": "0",
+                    "recipients": [
+                        {
+                            "recipient": "nobody"
+                        }
+                    ],
+                    "filters": []
                 }
             ]
-        },
-        "filters": {
-            "type": "array",
-            "format": "table",
-            "title": "Dashboard Filters",
-            "uniqueItems": true,
-            "propertyOrder": 700,
-            "items": {
-                "type": "object",
-                "minLength": 1,
-                "properties": {
-                    "filter_property": {
-                        "type": "string",
-                        "title": "Filter Property"
-                    },
-                    "filter_value": {
-                        "type": "string",
-                        "title": "Value"
-                    }
-                }
-            }
         }
     }
 }
