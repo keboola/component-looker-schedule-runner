@@ -1,0 +1,81 @@
+[
+    {
+        "name": "marcus testing",
+        "user_id": 13,
+        "run_as_recipient": false,
+        "enabled": true,
+        "look_id": null,
+        "dashboard_id": 16,
+        "lookml_dashboard_id": null,
+        "filters_string": "?Country=USA&Date%20%20Selector=2019%2F11%2F27&filter_config=%7B%22Country%22%3A%5B%7B%22type%22%3A%22%3D%22%2C%22values%22%3A%5B%7B%22constant%22%3A%22USA%22%7D%2C%7B%7D%5D%2C%22id%22%3A4%7D%5D%2C%22Date%20%20Selector%22%3A%5B%7B%22type%22%3A%22on%22%2C%22values%22%3A%5B%7B%22date%22%3A%222019-11-27T00%3A00%3A00.000Z%22%2C%22tz%22%3Atrue%7D%2C%7B%7D%5D%2C%22id%22%3A5%7D%5D%7D",
+        "require_results": false,
+        "require_no_results": false,
+        "require_change": false,
+        "send_all_results": false,
+        "crontab": "0 6 1 * *",
+        "datagroup": null,
+        "timezone": "America/Los_Angeles",
+        "query_id": null,
+        "scheduled_plan_destination": [
+            {
+                "id": 21,
+                "scheduled_plan_id": 19,
+                "format": "wysiwyg_pdf",
+                "apply_formatting": true,
+                "apply_vis": true,
+                "address": "marcus.wong@keboola.com",
+                "type": "email",
+                "parameters": null,
+                "message": null,
+                "looker_recipient": true,
+                "can": {
+                    "index": true,
+                    "show": true,
+                    "update": true,
+                    "destroy": true,
+                    "create": true,
+                    "run": true
+                }
+            }
+        ],
+        "run_once": false,
+        "include_links": true,
+        "pdf_paper_size": null,
+        "pdf_landscape": false,
+        "embed": false,
+        "color_theme": "",
+        "long_tables": false,
+        "id": 19,
+        "created_at": "2019-11-28T18:43:20.000+00:00",
+        "updated_at": "2019-11-28T18:43:20.000+00:00",
+        "title": "marcus testing",
+        "user": {
+            "id": 13,
+            "first_name": "Marcus",
+            "last_name": "Wong",
+            "avatar_url": "https://gravatar.lookercdn.com/avatar/4eabdeea557e41d1ce87e48cd0aba212?s=156&d=blank",
+            "display_name": "Marcus Wong",
+            "url": "https://localhost:19999/api/3.1/users/13",
+            "can": {
+                "show": true,
+                "index": true,
+                "show_details": true,
+                "index_details": true,
+                "sudo": false
+            }
+        },
+        "last_run_at": null,
+        "dashboard_filters": "?Country=USA&Date%20%20Selector=2019%2F11%2F27&filter_config=%7B%22Country%22%3A%5B%7B%22type%22%3A%22%3D%22%2C%22values%22%3A%5B%7B%22constant%22%3A%22USA%22%7D%2C%7B%7D%5D%2C%22id%22%3A4%7D%5D%2C%22Date%20%20Selector%22%3A%5B%7B%22type%22%3A%22on%22%2C%22values%22%3A%5B%7B%22date%22%3A%222019-11-27T00%3A00%3A00.000Z%22%2C%22tz%22%3Atrue%7D%2C%7B%7D%5D%2C%22id%22%3A5%7D%5D%7D",
+        "next_run_at": "2019-12-01T14:00:00.000+00:00",
+        "can": {
+            "index": true,
+            "see_other_user_schedules": true,
+            "email_to_others": true,
+            "create": true,
+            "run": true,
+            "update": true,
+            "show": true,
+            "destroy": true
+        }
+    }
+]
