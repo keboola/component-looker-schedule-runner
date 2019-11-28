@@ -121,7 +121,7 @@ class Component(KBCEnvHandler):
         for f in filters:
             temp[f['filter_property']] = f['filter_value']
         filter_string = '?{}'.format(urlencode(temp))
-        filter_string = '?Country=USA&Date%20%20Selector=2019%2F11%2F27'
+        # filter_string = '?Country=USA&Date%20%20Selector=2019%2F11%2F27'
 
         return filter_string
 
