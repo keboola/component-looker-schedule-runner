@@ -11,6 +11,7 @@ import os
 import datetime  # noqa
 import requests
 import json
+import pandas as pd
 from urllib.parse import urlencode
 
 from kbc.env_handler import KBCEnvHandler
@@ -82,6 +83,23 @@ class Component(KBCEnvHandler):
             logging.error(e)
             exit(1)
 
+    def get_tables(self, tables, mapping):
+        """
+        Evaluate input and output table names.
+        Only taking the first one into consideration!
+        mapping: input_mapping, output_mappings
+        """
+        # input file
+        table_list = []
+        for table in tables:
+            if mapping == "input_mapping":
+                destination = table["destination"]
+            elif mapping == "output_mapping":
+                destination = table["source"]
+            table_list.append(destination)
+
+        return table_list
+
     def post_request(self, url, header, body=None):
         '''
         Standard Post request
@@ -117,11 +135,7 @@ class Component(KBCEnvHandler):
         Filters Constructor
         '''
 
-        temp = {}
-        for f in filters:
-            temp[f['filter_property']] = f['filter_value']
-        filter_string = '?{}'.format(urlencode(temp))
-        # filter_string = '?Country=USA&Date%20%20Selector=2019%2F11%2F27'
+        filter_string = '?{}'.format(urlencode(filters))
 
         return filter_string
 
@@ -147,11 +161,35 @@ class Component(KBCEnvHandler):
         '''
         Main execution code
         '''
+        # Get proper list of tables
+        in_tables = self.configuration.get_input_tables()
+        in_table_names = self.get_tables(in_tables, 'input_mapping')
+        logging.info("IN tables mapped: "+str(in_table_names))
+
+        # Parsing dashboard configuration from each row
+        dashboards = []
+        for table in in_table_names:
+            dashboard_config = pd.read_csv(DEFAULT_TABLE_SOURCE+table)
+            for index, row in dashboard_config.iterrows():
+                dashboard_constructor = {
+                    'dashboard_id': row['dashboard_id'],
+                    'recipients': [
+                        {
+                            'recipient': row['recipients']
+                        }
+                    ]
+                    # 'filters': row['filters']
+                }
+                if not pd.isnull(row['filters']):
+                    dashboard_constructor['filters'] = json.loads(
+                        row['filters'])
+                dashboards.append(dashboard_constructor)
+
+        # Requests Parameters
         params = self.cfg_params  # noqa
         client_id = params.get(KEY_CLIENT_ID)
         client_secret = params.get(KEY_CLIENT_SECRET)
         self.base_url = '{}api/3.1/'.format(params.get(KEY_LOOKER_HOST_URL))
-        dashboards = params.get(KEY_DASHBOARDS)
 
         # Authorizating Looker Account
         self.authorize(client_id, client_secret)
@@ -178,7 +216,7 @@ class Component(KBCEnvHandler):
             request_base_form['scheduled_plan_destination'] = contact_destination
 
             # If filters exist in the configuration
-            if dashboard['filters']:
+            if 'filters' in dashboard:
                 filters_string = self._construct_filters(
                     filters=dashboard['filters'])
                 request_base_form['filters_string'] = filters_string

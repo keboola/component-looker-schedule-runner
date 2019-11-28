@@ -1,0 +1,110 @@
+{
+    "type": "object",
+    "title": "Scheduler Configuration",
+    "required": [
+        "client_id",
+        "#client_secret",
+        "looker_host_url",
+        "dashboards"
+    ],
+    "properties": {
+        "client_id": {
+            "type": "string",
+            "title": "Client ID",
+            "minLength": 1,
+            "propertyOrder": 100
+        },
+        "#client_secret": {
+            "type": "string",
+            "title": "Client Secret",
+            "minLenght": 1,
+            "propertyOrder": 200
+        },
+        "looker_host_url": {
+            "type": "string",
+            "title": "Looker Host URL",
+            "default": "https://",
+            "minLength": 1,
+            "propertyOrder": 400,
+            "description": "Full URL of the Looker URL that is used for your Looker account. Please include '/' at the very end of the address"
+        },
+        "dashboards": {
+            "type": "array",
+            "title": "Dashboards",
+            "uniqueItems": true,
+            "propertyOrder": 500,
+            "items": {
+                "type": "object",
+                "title": "Dashboard",
+                "minLength": 1,
+                "properties": {
+                    "dashboard_id": {
+                        "type": "string",
+                        "title": "Dashboard ID",
+                        "minLength": 1,
+                        "default": "0",
+                        "propertyOrder": 500
+                    },
+                    "recipients": {
+                        "type": "array",
+                        "format": "table",
+                        "title": "Recipients",
+                        "uniqueItems": true,
+                        "propertyOrder": 600,
+                        "items": {
+                            "type": "object",
+                            "minLength": 1,
+                            "properties": {
+                                "recipient": {
+                                    "type": "string",
+                                    "default": "nobody",
+                                    "minLength": 1,
+                                    "title": "Recipient"
+                                }
+                            }
+                        },
+                        "default": [
+                            {
+                                "recipient": "nobody"
+                            }
+                        ]
+                    },
+                    "filters": {
+                        "type": "array",
+                        "format": "table",
+                        "title": "Dashboard Filters",
+                        "uniqueItems": true,
+                        "propertyOrder": 700,
+                        "items": {
+                            "type": "object",
+                            "minLength": 1,
+                            "properties": {
+                                "filter_property": {
+                                    "type": "string",
+                                    "title": "Filter Property",
+                                    "propertyOrder": 100
+                                },
+                                "filter_value": {
+                                    "type": "string",
+                                    "title": "Value",
+                                    "propertyOrder": 200
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "default": [
+                {
+                    "dashboard_id": "0",
+                    "recipients": [
+                        {
+                            "recipient": "nobody"
+                        }
+                    ],
+                    "filters": []
+                }
+            ]
+        }
+    }
+}
