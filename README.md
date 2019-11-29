@@ -31,6 +31,7 @@ The application will be fetching all tables from the input mapping as an input. 
       - If user does not want to filter anything, please leave this field blank. Application will then proceed to refresh the dashboard with its `default preset filters`
 
 Sample Input File
+
 |dashboard_id|recipients|filters|
 |-|-|-|
 |1|leo@keboola.com|{"Company":"Keboola","Position":"Ninja"}|
