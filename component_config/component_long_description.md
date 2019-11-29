@@ -30,6 +30,14 @@ The application will be fetching all tables from the input mapping as an input. 
       - This cell's value *MUST* be in `JSON` formatted string
       - If user does not want to filter anything, please leave this field blank. Application will then proceed to refresh the dashboard with its `default preset filters`
 
+Sample Input File
+|dashboard_id|recipients|filters|
+|-|-|-|
+|1|leo@keboola.com|{"Company":"Keboola","Position":"Ninja"}|
+|2|fisa@keboola.com|{"Company":"Keboola","Position":"Master"}|
+|3|marcus@keboola.com|{"Company":"Keboola","Position":"Chef"}|
+
+
 ### Application Configuration
 
 1. Client ID
