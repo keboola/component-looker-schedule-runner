@@ -1,1 +1,1 @@
-Testing functional sample extractor for purposes of the python component template. 
+Creating an one-time schedule plan to send out the target dashboards to the target contacts
