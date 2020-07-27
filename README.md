@@ -43,7 +43,11 @@ Sample Input File
 1. Client ID
 2. Client Secret
 3. Looker Host URL
-    - Full URL of the Looker URL that is used for your Looker instance
-    - Please invlud '/' at the end of the URL address
+    - Full URL of the Looker URL that is used for your Looker API instance
+        - Can be found following path below
+            - Your Looker instance > "Admin" > "API" > "View API Docs"
+            - Your API URL will be in the URL with the port number
+            - API URL Details can be found [here](https://docs.looker.com/reference/api-and-integration/api-getting-started)
+    - Please include '/' at the end of the URL address
     - Example: https://{{looker_id}}.looker.com/
 
