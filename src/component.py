@@ -64,15 +64,6 @@ class Component(KBCEnvHandler):
 
     def __init__(self, debug=False):
         KBCEnvHandler.__init__(self, MANDATORY_PARS)
-        """
-        # override debug from config
-        if self.cfg_params.get('debug'):
-            debug = True
-        else:
-            debug = False
-
-        self.set_default_logger('DEBUG' if debug else 'INFO')
-        """
         logging.info('Running version %s', APP_VERSION)
         logging.info('Loading configuration...')
 
@@ -157,6 +148,45 @@ class Component(KBCEnvHandler):
 
         return contact_destination
 
+    def validate_user_inputs(self, params, in_tables):
+        '''
+        Validating user inputs
+        '''
+
+        # Empty Configuration
+        if not params:
+            logging.error('Your configuration is missing.')
+            sys.exit(1)
+
+        # Validate if any of the configuration is missing
+        if not params.get(KEY_CLIENT_ID) or not params.get(KEY_CLIENT_SECRET) or not params.get(KEY_LOOKER_HOST_URL):
+            logging.error(
+                'Required configuration is missing: [Client ID], [Client Secret], [Looker Host URL]')
+            sys.exit(1)
+
+        # Validating if there are any input files
+        if len(in_tables) == 0:
+            logging.error('Input tables are missing.')
+            sys.exit(1)
+
+        # Validating column inputs in the input files
+        required_columns = ['dashboard_id', 'recipients', 'filters']
+        for table in in_tables:
+            missing_columns = []
+            table_manifest_path = '{}.manifest'.format(table['full_path'])
+
+            with open(table_manifest_path, 'r') as f:
+                table_manifest = json.load(f)
+
+            for column in required_columns:
+                if column not in table_manifest['columns']:
+                    missing_columns.append(column)
+
+            if len(missing_columns) > 0:
+                logging.error('Input Table [{}] is missing columns: {}'.format(
+                    table['destination'], missing_columns))
+                sys.exit(1)
+
     def run(self):
         '''
         Main execution code
@@ -165,6 +195,15 @@ class Component(KBCEnvHandler):
         in_tables = self.configuration.get_input_tables()
         in_table_names = self.get_tables(in_tables, 'input_mapping')
         logging.info("IN tables mapped: "+str(in_table_names))
+
+        # Requests Parameters
+        params = self.cfg_params  # noqa
+        client_id = params.get(KEY_CLIENT_ID)
+        client_secret = params.get(KEY_CLIENT_SECRET)
+        self.base_url = '{}api/3.1/'.format(params.get(KEY_LOOKER_HOST_URL))
+
+        # Validating user inputs
+        self.validate_user_inputs(params, in_tables)
 
         # Parsing dashboard configuration from each row
         dashboards = []
@@ -184,12 +223,6 @@ class Component(KBCEnvHandler):
                     dashboard_constructor['filters'] = json.loads(
                         row['filters'])
                 dashboards.append(dashboard_constructor)
-
-        # Requests Parameters
-        params = self.cfg_params  # noqa
-        client_id = params.get(KEY_CLIENT_ID)
-        client_secret = params.get(KEY_CLIENT_SECRET)
-        self.base_url = '{}api/3.1/'.format(params.get(KEY_LOOKER_HOST_URL))
 
         # Authorizating Looker Account
         self.authorize(client_id, client_secret)

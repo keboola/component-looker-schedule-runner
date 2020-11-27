@@ -1,15 +1,29 @@
+### Configuration Parameters
+
+1. Client ID
+2. Client Secret
+3. Looker Host URL
+    - Full URL of the Looker URL that is used for your Looker API instance
+        - Can be found following path below
+            - Your Looker instance > "Admin" > "API" > "View API Docs"
+            - Your API URL will be in the URL with the port number
+            - API URL Details can be found [here](https://docs.looker.com/reference/api-and-integration/api-getting-started)
+    - Please include '/' at the end of the URL address
+    - Example: https://{{looker_id}}.looker.com/
+
 ### Input Mapping Requirements
 
-The application will be fetching all tables from the input mapping as an input. File names will not be a factor to cause the application to fail! However, each table from the input mapping must contain the following columns (*all lower case*):
+The application will be fetching all tables from the input mapping as an input. File names will not be a factor to cause the application to fail! However, each table from the input mapping must contain the all of the following columns (*all lower case*):
 
   1. dashboard_id
 
-      - The ID of the dashboard that the user is trying oo refresh or send out
+      - The ID of the dashboard to refresh
   
   2. recipients
 
-      - The current configuration of this application can only support sending out Emails, not FTP.
-      - The application can only accept 1 email entry. If the email is invalid, the Looker API will proceed with that incorrect entries only refreshing the dashboard with the latest dataset in Looker.
+      - The application supports sending out Emails only, FTP is not supported.
+      - If entered recipient email address is invalid, the application will proceed with the incorrect email address and only refresh the dashboard with the given parameters.
+      - Each row of the recipient can only contain 1 email address. If 1 or more email address is entered in the same row, the application will deem that email address is invalid. 
       - If the sole purpose of using this application is to refresh the dashboard and not to receive an email, user must enter a random `string` into the cell. This can be as random as entering `nobody` or `someone`.
 
       Examples:
@@ -34,16 +48,4 @@ Sample Input File
 |2|fisa@keboola.com|{"Company":"Keboola","Position":"Master"}|
 |3|marcus@keboola.com|{"Company":"Keboola","Position":"Chef"}|
 
-### Application Configuration
-
-1. Client ID
-2. Client Secret
-3. Looker Host URL
-    - Full URL of the Looker URL that is used for your Looker API instance
-        - Can be found following path below
-            - Your Looker instance > "Admin" > "API" > "View API Docs"
-            - Your API URL will be in the URL with the port number
-            - API URL Details can be found [here](https://docs.looker.com/reference/api-and-integration/api-getting-started)
-    - Please include '/' at the end of the URL address
-    - Example: https://{{looker_id}}.looker.com/
 
