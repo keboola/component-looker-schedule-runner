@@ -57,7 +57,9 @@ if 'KBC_LOGGER_ADDR' in os.environ and 'KBC_LOGGER_PORT' in os.environ:
     # remove default logging to stdout
     logger.removeHandler(logger.handlers[0])
 
-APP_VERSION = '0.0.1'
+NOW = datetime.datetime.now()
+
+APP_VERSION = '0.0.2'
 
 
 class Component(KBCEnvHandler):
@@ -161,7 +163,7 @@ class Component(KBCEnvHandler):
         # Validate if any of the configuration is missing
         if not params.get(KEY_CLIENT_ID) or not params.get(KEY_CLIENT_SECRET) or not params.get(KEY_LOOKER_HOST_URL):
             logging.error(
-                'Required configuration is missing: [Client ID], [Client Secret], [Looker Host URL]')
+                'Required configuration cannot be empty: Client ID, Client Secret, Looker Host URL')
             sys.exit(1)
 
         # Validating if there are any input files
@@ -183,9 +185,30 @@ class Component(KBCEnvHandler):
                     missing_columns.append(column)
 
             if len(missing_columns) > 0:
-                logging.error('Input Table [{}] is missing columns: {}'.format(
+                logging.error('Input Table [{}] is missing required columns: {}'.format(
                     table['destination'], missing_columns))
                 sys.exit(1)
+
+    def output_log(self, logs):
+        '''
+        Outputting log messages
+        '''
+
+        log_df = pd.DataFrame(logs)
+        log_df.to_csv(DEFAULT_TABLE_DESTINATION+'log.csv', index=False)
+
+        manifest = {
+            'incremental': True,
+            'primary_key': [
+                'datetime',
+                'dashboard_id',
+                'recipient',
+                'filters'
+            ]
+        }
+
+        with open(DEFAULT_TABLE_DESTINATION+'log.csv.manifest', 'w') as f:
+            json.dump(manifest, f)
 
     def run(self):
         '''
@@ -205,10 +228,19 @@ class Component(KBCEnvHandler):
         # Validating user inputs
         self.validate_user_inputs(params, in_tables)
 
+        # Authorizating Looker Account
+        self.authorize(client_id, client_secret)
+        # Header for all requests
+        self.request_header = {
+            'Authorization': 'Bearer {}'.format(self.access_token),
+            'Content-Type': 'application/json'
+        }
+
         # Parsing dashboard configuration from each row
         dashboards = []
         for table in in_table_names:
             dashboard_config = pd.read_csv(DEFAULT_TABLE_SOURCE+table)
+
             for index, row in dashboard_config.iterrows():
                 dashboard_constructor = {
                     'dashboard_id': row['dashboard_id'],
@@ -224,18 +256,13 @@ class Component(KBCEnvHandler):
                         row['filters'])
                 dashboards.append(dashboard_constructor)
 
-        # Authorizating Looker Account
-        self.authorize(client_id, client_secret)
-        # Header for all requests
-        self.request_header = {
-            'Authorization': 'Bearer {}'.format(self.access_token),
-            'Content-Type': 'application/json'
-        }
-
+        process_counter = 0
+        process_log = []
         # Running each of the dashboard in the dashboard configurations
         for dashboard in dashboards:
-            logging.info(
-                'Processing Dashboard - {}'.format(dashboard['dashboard_id']))
+            logging.debug(
+                'Processing Dashboard - {} sending to {}'.format(dashboard['dashboard_id'],
+                                                                 dashboard['recipients'][0]['recipient']))
             request_base_form = {
                 'name': 'run_once - {}'.format(dashboard['dashboard_id']),
                 'dashboard_id': int(dashboard['dashboard_id']),
@@ -258,9 +285,30 @@ class Component(KBCEnvHandler):
             request_url = '{}scheduled_plans/run_once'.format(self.base_url)
             res = self.post_request(
                 url=request_url, header=self.request_header, body=request_base_form)
+
             if res.status_code != 200:
                 logging.error(
                     'Error in processing Dashboard - [{}] - {}'.format(dashboard['dashboard_id'], res.json()))
+
+            # Logging number of processed records
+            process_counter += 1
+            if process_counter % 100:
+                logging.info('Processed {} records'.format(process_counter))
+
+            # Logging processed data
+            log_json = {
+                'datetime': NOW,
+                'dashboard_id': dashboard['dashboard_id'],
+                'recipient': dashboard['recipients'][0]['recipient'],
+                'filters': dashboard['filters'] if 'filters' in dashboard else '',
+                'request_status': 'Sent' if res.status_code in (200, 201) else 'Error',
+                'request_message': '' if res.status_code in (200, 201) else res.text()
+            }
+            process_log.append(log_json)
+
+        logging.info('Total processed records: {}'.format(process_counter))
+        # Output Log
+        self.output_log(process_log)
 
         logging.info("Extraction finished")
 
