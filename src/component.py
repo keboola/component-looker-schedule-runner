@@ -13,6 +13,7 @@ import requests
 import json
 import pandas as pd
 from urllib.parse import urlencode
+import validators
 
 from kbc.env_handler import KBCEnvHandler
 from kbc.result import KBCTableDef  # noqa
@@ -59,7 +60,7 @@ if 'KBC_LOGGER_ADDR' in os.environ and 'KBC_LOGGER_PORT' in os.environ:
 
 NOW = datetime.datetime.now()
 
-APP_VERSION = '0.0.2'
+APP_VERSION = '0.0.3'
 
 
 class Component(KBCEnvHandler):
@@ -189,6 +190,26 @@ class Component(KBCEnvHandler):
                     table['destination'], missing_columns))
                 sys.exit(1)
 
+    def validate_url(self, url):
+        '''
+        URL adjustments if required
+        Validating if the URL is valid
+        '''
+
+        # Validating URL structure
+        looker_url = f'{url}/' if url[-1] != '/' else url
+        if looker_url[:8] != 'https://' or looker_url[:7] != 'http://':
+            looker_url = 'https://{}'.format(looker_url)
+
+        # Validating if URL is valid
+        if not validators.url(looker_url):
+            logging.error('Your Looker URL is not valid.')
+            sys.exit(1)
+
+        looker_api_url = '{}api/3.1/'.format(looker_url)
+
+        return looker_api_url
+
     def output_log(self, logs):
         '''
         Outputting log messages
@@ -221,12 +242,14 @@ class Component(KBCEnvHandler):
 
         # Requests Parameters
         params = self.cfg_params  # noqa
-        client_id = params.get(KEY_CLIENT_ID)
-        client_secret = params.get(KEY_CLIENT_SECRET)
-        self.base_url = '{}api/3.1/'.format(params.get(KEY_LOOKER_HOST_URL))
 
         # Validating user inputs
         self.validate_user_inputs(params, in_tables)
+
+        # User input parameters
+        client_id = params.get(KEY_CLIENT_ID)
+        client_secret = params.get(KEY_CLIENT_SECRET)
+        self.base_url = self.validate_url(params.get(KEY_LOOKER_HOST_URL))
 
         # Authorizating Looker Account
         self.authorize(client_id, client_secret)

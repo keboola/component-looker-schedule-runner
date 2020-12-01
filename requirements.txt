@@ -3,3 +3,4 @@ logging_gelf==0.0.18
 mock
 freezegun
 pandas
+validators

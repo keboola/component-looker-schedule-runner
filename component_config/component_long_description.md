@@ -5,7 +5,7 @@ The purpose of this application is to create a one-time schedule plan pre-cachin
 1. Client ID
 2. Client Secret
 3. Looker Host URL
-    - Full URL of the Looker URL that is used for your Looker API instance
+    - Full Looker URL
         - Can be found following path below
             - Your Looker instance > "Admin" > "API" > "View API Docs"
             - Your API URL will be in the URL with the port number

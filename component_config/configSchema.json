@@ -25,7 +25,7 @@
             "default": "https://",
             "minLength": 1,
             "propertyOrder": 400,
-            "description": "Full URL of the Looker URL that is used for your Looker account. Please include '/' at the very end of the address"
+            "description": "Full Looker URL. Please include '/' at the very end of the address"
         }
     }
 }
