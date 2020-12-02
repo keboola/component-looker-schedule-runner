@@ -198,7 +198,8 @@ class Component(KBCEnvHandler):
 
         # Validating URL structure
         looker_url = f'{url}/' if url[-1] != '/' else url
-        if looker_url[:8] != 'https://' or looker_url[:7] != 'http://':
+
+        if not (looker_url[:8] == 'https://' or looker_url[:7] == 'http://'):
             looker_url = 'https://{}'.format(looker_url)
 
         # Validating if URL is valid
