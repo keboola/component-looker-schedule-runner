@@ -316,7 +316,7 @@ class Component(KBCEnvHandler):
 
             # Logging number of processed records
             process_counter += 1
-            if process_counter % 100:
+            if process_counter % 100 == 0:
                 logging.info('Processed {} records'.format(process_counter))
 
             # Logging processed data
