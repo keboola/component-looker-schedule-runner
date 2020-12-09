@@ -12,6 +12,7 @@ The purpose of this application is to create a one-time schedule plan pre-cachin
             - API URL Details can be found [here](https://docs.looker.com/reference/api-and-integration/api-getting-started)
     - Please include '/' at the end of the URL address
     - Example: https://{{looker_id}}.looker.com/
+    - Exmaple 2: https://{{looker_id}}.cloud.looker.com/
 
 ### Input Mapping Requirements
 
