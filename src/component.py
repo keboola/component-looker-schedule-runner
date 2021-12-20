@@ -332,7 +332,8 @@ class Component(KBCEnvHandler):
 
         logging.info('Total processed records: {}'.format(process_counter))
         # Output Log
-        self.output_log(process_log)
+        if process_log:
+            self.output_log(process_log)
 
         logging.info("Extraction finished")
 
