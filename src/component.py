@@ -33,7 +33,8 @@ class Component(ComponentBase):
 
         outfile = self.create_out_table_definition(OUTPUT_TABLE_NAME,
                                                    incremental=True,
-                                                   primary_key=OUTPUT_TABLE_P_KEYS)
+                                                   primary_key=OUTPUT_TABLE_P_KEYS,
+                                                   columns=OUTPUT_TABLE_COLUMNS)
 
         with open(outfile.full_path, 'w') as output:
             writer = DictWriter(output, OUTPUT_TABLE_COLUMNS)
