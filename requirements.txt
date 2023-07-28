@@ -1,6 +1,8 @@
-https://bitbucket.org/kds_consulting_team/keboola-python-util-lib/get/0.2.0.zip#egg=kbc
-logging_gelf==0.0.18
-mock
-freezegun
-pandas
+keboola.component==1.4.3
+keboola.http-client==1.0.0
+keboola.utils==1.1.0
+looker-sdk==23.10.0
+mock==5.0.2
+freezegun==1.2.2
+dataconf==2.2.1
 validators

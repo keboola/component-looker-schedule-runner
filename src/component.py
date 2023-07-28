@@ -1,350 +1,129 @@
-'''
-Template Component main class.
-
-'''
-
 import logging
-import logging_gelf.handlers
-import logging_gelf.formatters
-import sys
-import os
-import datetime  # noqa
-import requests
-import json
-import pandas as pd
-from urllib.parse import urlencode
 import validators
+import json
+from csv import DictReader, DictWriter
 
-from kbc.env_handler import KBCEnvHandler
-from kbc.result import KBCTableDef  # noqa
-from kbc.result import ResultWriter  # noqa
+from keboola.component.base import ComponentBase
+from keboola.component.exceptions import UserException
 
+from client import LookerClient, LookerClientException
+from configuration import Configuration
 
-# configuration variables
-KEY_CLIENT_ID = 'client_id'
-KEY_CLIENT_SECRET = '#client_secret'
-KEY_LOOKER_HOST_URL = 'looker_host_url'
-KEY_DASHBOARDS = 'dashboards'
+REQUIRED_INPUT_TABLE_COLUMNS = ['dashboard_id', 'recipients', 'filters']
 
-MANDATORY_PARS = [
-    KEY_CLIENT_ID,
-    KEY_CLIENT_SECRET,
-    KEY_LOOKER_HOST_URL,
-    KEY_DASHBOARDS
-]
-MANDATORY_IMAGE_PARS = []
-
-# Default Table Output Destination
-DEFAULT_TABLE_SOURCE = "/data/in/tables/"
-DEFAULT_TABLE_DESTINATION = "/data/out/tables/"
-DEFAULT_FILE_DESTINATION = "/data/out/files/"
-DEFAULT_FILE_SOURCE = "/data/in/files/"
-
-# Logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)-8s : [line:%(lineno)3s] %(message)s',
-    datefmt="%Y-%m-%d %H:%M:%S")
-
-if 'KBC_LOGGER_ADDR' in os.environ and 'KBC_LOGGER_PORT' in os.environ:
-
-    logger = logging.getLogger()
-    logging_gelf_handler = logging_gelf.handlers.GELFTCPSocketHandler(
-        host=os.getenv('KBC_LOGGER_ADDR'), port=int(os.getenv('KBC_LOGGER_PORT')))
-    logging_gelf_handler.setFormatter(
-        logging_gelf.formatters.GELFFormatter(null_character=True))
-    logger.addHandler(logging_gelf_handler)
-
-    # remove default logging to stdout
-    logger.removeHandler(logger.handlers[0])
-
-NOW = datetime.datetime.now()
-
-APP_VERSION = '0.0.3'
+OUTPUT_TABLE_NAME = "log.csv"
+OUTPUT_TABLE_P_KEYS = ['datetime', 'dashboard_id', 'recipient', 'filters']
+OUTPUT_TABLE_COLUMNS = ['datetime', 'dashboard_id', 'recipient', 'filters', 'request_status', 'request_message']
 
 
-class Component(KBCEnvHandler):
+class Component(ComponentBase):
 
-    def __init__(self, debug=False):
-        KBCEnvHandler.__init__(self, MANDATORY_PARS)
-        logging.info('Running version %s', APP_VERSION)
-        logging.info('Loading configuration...')
+    def __init__(self):
+        super().__init__()
+        self._configuration: Configuration
+        self.client: LookerClient
 
+    def run(self):
+        self._init_configuration()
+        self._init_client()
+
+        dashboards = self.get_all_dashboards()
+
+        processed_records = 0
+
+        outfile = self.create_out_table_definition(OUTPUT_TABLE_NAME,
+                                                   incremental=True,
+                                                   primary_key=OUTPUT_TABLE_P_KEYS,
+                                                   columns=OUTPUT_TABLE_COLUMNS)
+
+        with open(outfile.full_path, 'w') as output:
+            writer = DictWriter(output, OUTPUT_TABLE_COLUMNS)
+            for dashboard in dashboards:
+                log = self.run_dashboard(dashboard)
+                logging.debug(f"Processing Dashboard - {dashboard['dashboard_id']} sending to "
+                              f"{dashboard['recipients'][0]['recipient']}")
+
+                processed_records += 1
+                if processed_records % 100 == 0:
+                    logging.info(f'Processed {processed_records} records')
+
+                writer.writerow(log)
+
+        logging.info(f'Total processed records: {processed_records}')
+
+        logging.info("Extraction finished")
+        self.write_manifest(outfile)
+
+    def run_dashboard(self, dashboard: dict) -> dict:
         try:
-            self.validate_config()
-            self.validate_image_parameters(MANDATORY_IMAGE_PARS)
-        except ValueError as e:
-            logging.error(e)
-            exit(1)
+            return self.client.run_dashboard(dashboard)
+        except LookerClientException as looker_exc:
+            raise UserException(looker_exc) from looker_exc
 
-    def get_tables(self, tables, mapping):
+    def _init_configuration(self) -> None:
+        self.validate_configuration_parameters(Configuration.get_dataclass_required_parameters())
+        self._configuration: Configuration = Configuration.load_from_dict(self.configuration.parameters)
+
+    def _init_client(self) -> None:
+        base_url = self.validate_url(self._configuration.looker_host_url)
+        try:
+            self.client = LookerClient(base_url=base_url,
+                                       client_id=self._configuration.client_id,
+                                       client_secret=self._configuration.pswd_client_secret)
+        except LookerClientException as looker_exc:
+            raise UserException(looker_exc) from looker_exc
+
+    def get_all_dashboards(self) -> list[dict]:
+        dashboards = []
+        for table in self.get_input_tables_definitions():
+            with open(table.full_path) as input_table:
+                reader = DictReader(input_table)
+                self.validate_input_table_columns(list(reader.fieldnames), table.name)
+                for row in reader:
+                    dashboard = {'dashboard_id': row.get('dashboard_id'),
+                                 'recipients': [{'recipient': row.get('recipients')}],
+                                 }
+                    if row.get('filters'):
+                        dashboard["filters"] = json.loads(row['filters'])
+                    dashboards.append(dashboard)
+        return dashboards
+
+    @staticmethod
+    def validate_url(url: str) -> str:
         """
-        Evaluate input and output table names.
-        Only taking the first one into consideration!
-        mapping: input_mapping, output_mappings
-        """
-        # input file
-        table_list = []
-        for table in tables:
-            if mapping == "input_mapping":
-                destination = table["destination"]
-            elif mapping == "output_mapping":
-                destination = table["source"]
-            table_list.append(destination)
-
-        return table_list
-
-    def post_request(self, url, header, body=None):
-        '''
-        Standard Post request
-        '''
-
-        r = requests.post(url=url, headers=header, data=json.dumps(body))
-
-        return r
-
-    def authorize(self, client_id, client_secret):
-        '''
-        Authorizing Looker account with client id and secret
-        '''
-
-        auth_url = self.base_url + 'login'
-        auth_header = {
-            'Content-Type': 'application/x-www-form-urlencoded',
-        }
-        auth_body = 'client_id={}&client_secret={}'.format(
-            client_id, client_secret)
-        request_url = auth_url+'?'+auth_body
-
-        res = self.post_request(request_url, auth_header)
-        if res.status_code != 200:
-            logging.error(
-                "Authorization failed. Please check your credentials.")
-            sys.exit(1)
-
-        self.access_token = res.json()['access_token']
-
-    def _construct_filters(self, filters):
-        '''
-        Filters Constructor
-        '''
-
-        filter_string = '?{}'.format(urlencode(filters))
-
-        return filter_string
-
-    def _construct_contacts(self, contacts):
-        '''
-        Contacts destination constructor
-        '''
-
-        contact_destination = []
-        for contact in contacts:
-            temp_base = {
-                'format': 'wysiwyg_pdf',
-                'apply_formatting': True,
-                'apply_vis': True,
-                'type': 'email',
-                'address': contact['recipient']
-            }
-            contact_destination.append(temp_base)
-
-        return contact_destination
-
-    def validate_user_inputs(self, params, in_tables):
-        '''
-        Validating user inputs
-        '''
-
-        # Empty Configuration
-        if not params:
-            logging.error('Your configuration is missing.')
-            sys.exit(1)
-
-        # Validate if any of the configuration is missing
-        if not params.get(KEY_CLIENT_ID) or not params.get(KEY_CLIENT_SECRET) or not params.get(KEY_LOOKER_HOST_URL):
-            logging.error(
-                'Required configuration cannot be empty: Client ID, Client Secret, Looker Host URL')
-            sys.exit(1)
-
-        # Validating if there are any input files
-        if len(in_tables) == 0:
-            logging.error('Input tables are missing.')
-            sys.exit(1)
-
-        # Validating column inputs in the input files
-        required_columns = ['dashboard_id', 'recipients', 'filters']
-        for table in in_tables:
-            missing_columns = []
-            table_manifest_path = '{}.manifest'.format(table['full_path'])
-
-            with open(table_manifest_path, 'r') as f:
-                table_manifest = json.load(f)
-
-            for column in required_columns:
-                if column not in table_manifest['columns']:
-                    missing_columns.append(column)
-
-            if len(missing_columns) > 0:
-                logging.error('Input Table [{}] is missing required columns: {}'.format(
-                    table['destination'], missing_columns))
-                sys.exit(1)
-
-    def validate_url(self, url):
-        '''
         URL adjustments if required
         Validating if the URL is valid
-        '''
-
+        """
         # Validating URL structure
         looker_url = f'{url}/' if url[-1] != '/' else url
 
-        if not (looker_url[:8] == 'https://' or looker_url[:7] == 'http://'):
-            looker_url = 'https://{}'.format(looker_url)
+        if looker_url[:8] != 'https://' and looker_url[:7] != 'http://':
+            looker_url = f'https://{looker_url}'
 
         # Validating if URL is valid
         if not validators.url(looker_url):
-            logging.error('Your Looker URL is not valid.')
-            sys.exit(1)
+            raise UserException('Your Looker URL is not valid.')
 
-        looker_api_url = '{}api/3.1/'.format(looker_url)
+        return f'{looker_url}api/4.0/'
 
-        return looker_api_url
-
-    def output_log(self, logs):
-        '''
-        Outputting log messages
-        '''
-
-        log_df = pd.DataFrame(logs)
-        log_df.to_csv(DEFAULT_TABLE_DESTINATION+'log.csv', index=False)
-
-        manifest = {
-            'incremental': True,
-            'primary_key': [
-                'datetime',
-                'dashboard_id',
-                'recipient',
-                'filters'
-            ]
-        }
-
-        with open(DEFAULT_TABLE_DESTINATION+'log.csv.manifest', 'w') as f:
-            json.dump(manifest, f)
-
-    def run(self):
-        '''
-        Main execution code
-        '''
-        # Get proper list of tables
-        in_tables = self.configuration.get_input_tables()
-        in_table_names = self.get_tables(in_tables, 'input_mapping')
-        logging.info("IN tables mapped: "+str(in_table_names))
-
-        # Requests Parameters
-        params = self.cfg_params  # noqa
-
-        # Validating user inputs
-        self.validate_user_inputs(params, in_tables)
-
-        # User input parameters
-        client_id = params.get(KEY_CLIENT_ID)
-        client_secret = params.get(KEY_CLIENT_SECRET)
-        self.base_url = self.validate_url(params.get(KEY_LOOKER_HOST_URL))
-
-        # Authorizating Looker Account
-        self.authorize(client_id, client_secret)
-        # Header for all requests
-        self.request_header = {
-            'Authorization': 'Bearer {}'.format(self.access_token),
-            'Content-Type': 'application/json'
-        }
-
-        # Parsing dashboard configuration from each row
-        dashboards = []
-        for table in in_table_names:
-            dashboard_config = pd.read_csv(DEFAULT_TABLE_SOURCE+table)
-
-            for index, row in dashboard_config.iterrows():
-                dashboard_constructor = {
-                    'dashboard_id': row['dashboard_id'],
-                    'recipients': [
-                        {
-                            'recipient': row['recipients']
-                        }
-                    ]
-                    # 'filters': row['filters']
-                }
-                if not pd.isnull(row['filters']):
-                    dashboard_constructor['filters'] = json.loads(
-                        row['filters'])
-                dashboards.append(dashboard_constructor)
-
-        process_counter = 0
-        process_log = []
-        # Running each of the dashboard in the dashboard configurations
-        for dashboard in dashboards:
-            logging.debug(
-                'Processing Dashboard - {} sending to {}'.format(dashboard['dashboard_id'],
-                                                                 dashboard['recipients'][0]['recipient']))
-            request_base_form = {
-                'name': 'run_once - {}'.format(dashboard['dashboard_id']),
-                'dashboard_id': int(dashboard['dashboard_id']),
-                'title': 'run_once - {}'.format(dashboard['dashboard_id']),
-                'enable': True,
-                'run_once': True
-            }
-
-            contact_destination = self._construct_contacts(
-                dashboard['recipients'])
-            request_base_form['scheduled_plan_destination'] = contact_destination
-
-            # If filters exist in the configuration
-            if 'filters' in dashboard:
-                filters_string = self._construct_filters(
-                    filters=dashboard['filters'])
-                request_base_form['filters_string'] = filters_string
-
-            # Schedule requesting
-            request_url = '{}scheduled_plans/run_once'.format(self.base_url)
-            res = self.post_request(
-                url=request_url, header=self.request_header, body=request_base_form)
-
-            if res.status_code != 200:
-                logging.error(
-                    'Error in processing Dashboard - [{}] - {}'.format(dashboard['dashboard_id'], res.json()))
-
-            # Logging number of processed records
-            process_counter += 1
-            if process_counter % 100 == 0:
-                logging.info('Processed {} records'.format(process_counter))
-
-            # Logging processed data
-            log_json = {
-                'datetime': NOW,
-                'dashboard_id': dashboard['dashboard_id'],
-                'recipient': dashboard['recipients'][0]['recipient'],
-                'filters': dashboard['filters'] if 'filters' in dashboard else '',
-                'request_status': 'Sent' if res.status_code in (200, 201) else 'Error',
-                'request_message': '' if res.status_code in (200, 201) else res.text()
-            }
-            process_log.append(log_json)
-
-        logging.info('Total processed records: {}'.format(process_counter))
-        # Output Log
-        if process_log:
-            self.output_log(process_log)
-
-        logging.info("Extraction finished")
+    @staticmethod
+    def validate_input_table_columns(input_columns: list[str], table_name: str) -> None:
+        missing_columns = []
+        for required_column in REQUIRED_INPUT_TABLE_COLUMNS:
+            if required_column not in input_columns:
+                missing_columns.append(required_column)
+        if len(missing_columns) > 0:
+            raise UserException(f"Input Table [{table_name}] is missing required columns: {missing_columns}")
 
 
-"""
-        Main entrypoint
-"""
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        debug = sys.argv[1]
-    else:
-        debug = True
-    comp = Component(debug)
-    comp.run()
+    try:
+        comp = Component()
+        # this triggers the run method by default and is controlled by the configuration.action parameter
+        comp.execute_action()
+    except UserException as exc:
+        logging.exception(exc)
+        exit(1)
+    except Exception as exc:
+        logging.exception(exc)
+        exit(2)
